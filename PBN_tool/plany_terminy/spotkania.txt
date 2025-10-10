@@ -1,9 +1,0 @@
-Spotkanie 1 kwietnia, 2025 (18:30)
-[AM + BP] umówiliśmy kod publikacji [33] w punkcie WP2 w opisie projektu. Workflow opisany w README.md do [33] jest niedziałający (dokładną informację podaję
-w innym pliku). Główne pytania i cele na teraz / zaraz:
-- Skąd [33] bierze dane. W szczególności wilson_raw_data albo inne dane czy są one prawdziwe czy zgenerowane przez jakąś losową sieć boolowską?
-- Jak dokładnie działa ich konwertacja danych opisana w funkcji "initialise_raw_data"? W szczególności czy dane po tym są zawsze zbinaryzowane czy 
-autor pozwala na dane ciągłe?
-- Jak wygląda ich scoring? W jaki sposób oni jeszcze nawet na stage_1 w "model_train" odrzucają jakieś sieci? Czy nie odrzucają nic, to w takim razie jak wybierają ten jeden najlepszy?
-- Wygenerować dane za pomocą skryptu AM a potem spróbować puścić na tym skrypt z [33] (odpowiednio zmodyfikowany) i wziąć z niego TOP 10 % (tu pole do popisu) najlepszych sieci i wstawić do 
-publikacji [6] jako (?)

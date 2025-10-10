@@ -8,6 +8,8 @@ import boolean as bool
 from collections import deque, defaultdict
 from sympy.codegen.ast import continue_
 
+import bang
+
 import utils
 from utils import *
 import copy
@@ -719,6 +721,14 @@ class BN_Realisation:
 
         return attractors
 
+    @staticmethod
+    def getAttractorsMonteCarlo(file):
+        pbn = bang.load_from_file(file, "assa")
+        pbn._n_parallel = min(max(77, pbn.n_nodes * 10), 2 ** pbn.n_nodes - 1)
+        pbn.device = "gpu"
+
+        attractors = pbn.monte_carlo_detect_attractors(trajectory_length=1100, attractor_length=1300)
+        print(attractors)
 
     """
     Constructor for the Boolean Network (BN_Realisation) class.
