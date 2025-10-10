@@ -1,0 +1,5 @@
+The order is ['x0', 'x1', 'x2', 'x3', 'x4']Attractor 1:
+=======================
+(0, 1, 0, 0, 0)
+(0, 1, 0, 1, 0)
+Number of states 2 

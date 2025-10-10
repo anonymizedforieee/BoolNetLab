@@ -1,0 +1,32 @@
+Agent M
+	Vars:
+		x0 : boolean;
+		x1 : boolean;
+		x2 : boolean;
+		x3 : boolean;
+		x4 : boolean;
+		x5 : boolean;
+	end Vars
+	Actions = {none};
+	Protocol:
+		Other: {none};
+	end Protocol
+	Evolution:
+		x0=true if x0=true;
+		x0=false if x0=false;
+		x1=true if x1=true;
+		x1=false if x1=false;
+		x2=true if ~x1&~x2=true;
+		x2=false if ~x1&~x2=false;
+		x3=true if x0=true;
+		x3=false if x0=false;
+		x4=true if x0=true;
+		x4=false if x0=false;
+		x5=true if ~x0&~x2=true;
+		x5=false if ~x0&~x2=false;
+	end Evolution
+end Agent
+
+InitStates
+		M.x0=false and M.x1=false;
+end InitStates

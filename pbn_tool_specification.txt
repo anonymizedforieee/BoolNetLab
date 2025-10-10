@@ -1,0 +1,44 @@
+BN / PBN tool (in kind of pyBoolNet)
+
+  - Import and export bnet, ispl, SBML, ... 
+
+  - Standard and context-sensitive PBNs
+
+  - Generation of random models satisfying given structural properties
+
+  - Simulation (synchronous and asynchronous update mode)
+
+    - With and without perturbations
+
+    - Simulation under application of control actions
+
+  - Efficient, parallelised simulation with the code written within ZPP
+
+  - Implement iPASIP
+
+  - Detection of attractors (synchronous and asynchronous update mode)
+
+    - All attractors (based on state transition graph (STG) and symbolically with BDD)
+
+    - Attractors reachable from particular states (STG and BDD)
+
+    - Use python-igraph for efficiency (instead of NetworkX) for STG-based approaches
+
+  - Visualisation
+
+    - Structure graph
+
+      + Different layouts
+
+    - Full or partial (starting from a given state) STG graphs
+ 
+      + Different layouts
+
+      + Colouring of attractors
+
+    - "Attractor landscape", i.e., attractors and transitions between attractors under change of environmental conditions
+
+  - Methods for "forward-edgectics"
+
+  - Steady-state analysis of PBNs (in the future)
+
