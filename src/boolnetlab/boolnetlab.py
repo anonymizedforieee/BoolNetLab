@@ -7,6 +7,7 @@ from pyvis.network import Network
 import boolean as bool
 from collections import deque, defaultdict
 from sympy.codegen.ast import continue_
+from sympy.logic.boolalg import truth_table
 
 import bang
 
@@ -21,20 +22,22 @@ from functools import cache
 
 try:
     import dd.cudd as bdd
+
     CUDD_LOADED = True
 except ImportError:
     print("""WARNING: The dd.cudd module of the dd package, which provides Cython bindings to the CUDD library in C,
          is not compiled and cannot be loaded. Please refer to https://github.com/tulip-control/dd for
          installation instructions. Falling back to dd.autoref, which wraps the pure-Python Binary
          Decision Diagrams implementation dd.bdd."""
-    )
+          )
     import dd.autoref as bdd
+
     CUDD_LOADED = False
 
-from ispl2bn import ispl2bn
 from dd.autoref import Function
 from tqdm import tqdm
 import sys
+
 
 class BN_Realisation:
     __bool_algebra = bool.BooleanAlgebra()
@@ -67,7 +70,6 @@ class BN_Realisation:
 
         return fun, is_fixed, num_ps
 
-
     def getInputNodeNames(self):
 
         input_nodes = []
@@ -89,12 +91,25 @@ class BN_Realisation:
     """
     Dodać description (Andrzej).
     """
-    def save_ispl(self, filename: str, initial_condition: str = None, verbose: bool = True):
+
+    def save_ispl(self, filepath: str, initial_condition: str = None, verbose: bool = True) -> None:
 
         if verbose:
-            print(f"Exporting the Boolean network to the {filename} file in the .ispl format ... ", end='')
+            print(f"Exporting the Boolean network to the {filepath} file in the .ispl format ... ", end='')
 
-        with open(filename, 'w') as file:
+        # Creating folders if necessary
+        if filepath[-1] == '\\' or filepath[-1] == '/':
+            filepath = filepath[:-1]
+
+        folder = os.path.dirname(filepath)
+        filename = os.path.basename(filepath)
+
+        if folder != '' and not os.path.exists(folder):
+            os.makedirs(folder)
+            if verbose:
+                print(f"Created folder {folder}.")
+
+        with open(filepath, 'w') as file:
 
             file.write('Agent M\n')
 
@@ -138,7 +153,6 @@ class BN_Realisation:
         if verbose:
             print('done.')
 
-
     """
      This function reads variables, update functions from the ispl file.
 
@@ -147,8 +161,9 @@ class BN_Realisation:
      Returns:
         BN_Realisation object which has nodes and functions from the ispl file.
     """
+
     @classmethod
-    def load_ispl(cls, path_to_ispl_file : str):
+    def load_ispl(cls, path_to_ispl_file: str):
         if not os.path.isfile(path_to_ispl_file):
             raise FileNotFoundError(path_to_ispl_file)
 
@@ -186,12 +201,12 @@ class BN_Realisation:
                     line = ispl_file.readline()
                 break
 
-        assert len(BN_variables) == len(BN_functions), "The number of nodes does not match the number of Boolean functions."
+        assert len(BN_variables) == len(
+            BN_functions), "The number of nodes does not match the number of Boolean functions."
 
         print(f"Loaded a Boolean network of {len(BN_variables)} nodes.")
 
         return BN_Realisation(BN_variables, BN_functions)
-
 
     @classmethod
     def generate_random_bn(cls, num_nodes: int, max_parent_nodes: int, min_parent_nodes: int = 1,
@@ -269,7 +284,6 @@ class BN_Realisation:
 
         return bn
 
-
     """
     Generates a state transition graph for the Boolean network.
 
@@ -280,7 +294,8 @@ class BN_Realisation:
      Returns:
         networkx.Graph: A NetworkX graph object representing the state transition graph.
     """
-    def generateStateTransitionGraph(self, excludedNodes : list[str] = []) -> nx.Graph:
+
+    def generateStateTransitionGraph(self, excludedNodes: list[str] = []) -> nx.Graph:
         G = nx.DiGraph()
 
         for initial_state_int in range(2 ** self.num_nodes):
@@ -294,7 +309,6 @@ class BN_Realisation:
             G.add_edges_from(edges_aux)
 
         return G
-    
 
     """
         Returns the set of neighboring states for a given state under the current update mode of the Boolean network.
@@ -309,7 +323,8 @@ class BN_Realisation:
         Returns:
             set[tuple[int, ...]]: A set of neighboring states.
     """
-    def getNeighborStates(self, state : tuple[int, ...], excludedNodes : list[str] = []) -> set[tuple[int, ...]]:
+
+    def getNeighborStates(self, state: tuple[int, ...], excludedNodes: list[str] = []) -> set[tuple[int, ...]]:
         neighborStates = []
 
         excludedNodesIndices = [self.node_names.index(exclNode) for exclNode in excludedNodes]
@@ -343,7 +358,6 @@ class BN_Realisation:
 
         return set(tuple(neighborState) for neighborState in neighborStates)
 
-
     """
     This method extracts attractors from their compressed BDD representations and converts them into an explicit form.
 
@@ -357,6 +371,7 @@ class BN_Realisation:
         of the form 'Ai', where i is a consecutive number starting from 0, identifying each attractor.
     
     """
+
     def _enumerate_attractors(self, all_attractors: list[Function]) -> dict[str, set[str]]:
 
         attractors = dict()
@@ -372,7 +387,6 @@ class BN_Realisation:
             attractors['A' + str(i)] = attractor
 
         return attractors
-
 
     """
         Parameters
@@ -400,6 +414,7 @@ class BN_Realisation:
         -------
         None
     """
+
     def draw_state_transition_graph(self,
                                     filepath: str,
                                     selected_node=None,
@@ -474,7 +489,6 @@ class BN_Realisation:
 
         print(f"Done. The state transition graph is saved to {os.path.join(folder, filename)}")
 
-
     """
         This method constructs an interaction graph for the Boolean network, where each edge represents
         a dependence of the target node on the source node. The dependency is determined syntactically
@@ -486,6 +500,7 @@ class BN_Realisation:
          A NetworkX graph object representing the state transition graph.
 
     """
+
     @cache
     def getStructureGraph(self):
 
@@ -501,7 +516,6 @@ class BN_Realisation:
 
         return G
 
-
     """
         Plots structure graph of the BN
 
@@ -514,6 +528,7 @@ class BN_Realisation:
         -------
         None
     """
+
     def plot_structure_graph(self, layout: str = 'spring') -> None:
         struct_graph = self.getStructureGraph()
 
@@ -543,7 +558,6 @@ class BN_Realisation:
 
         plt.show()
 
-
     """
         Plots the structure graph of a Boolean network using PyGraphviz and save the image in a file of specified format provided by the file extension.
     
@@ -562,6 +576,7 @@ class BN_Realisation:
         -------
         None
     """
+
     def plot_structure_graph_pgv(self, filepath: str, layout: str = 'dot') -> None:
         struct_graph = nx.drawing.nx_agraph.to_agraph(self.getStructureGraph())
         struct_graph.layout(layout)
@@ -578,6 +593,66 @@ class BN_Realisation:
 
         # struct_graph is an instant of the PyGraphviz.AGraph class
         struct_graph.draw(os.path.join(folder, filename))
+
+    """
+        Makes an interactive graph of the BN structure in HTML format.
+
+        Parameters
+        ----------
+        filepath: Path to the file where the structure graph image is saved. The file is in HTML format, hence the filename extension must be .html.
+        node_size: Size of graph nodes (default 20).
+        height: Height of the graph in pixels (default 500).
+        width: Width of the graph in pixels (default 500).
+
+        Returns
+        -------
+        None
+    """
+
+    def plot_structure_graph_interactive(self, filepath: str, node_size: int = 20, height: int = 500,
+                                         width: int = 500) -> None:
+
+        g = Network(height=height, width=width, directed=True, notebook=True, cdn_resources='in_line')
+        g.toggle_hide_edges_on_drag(False)
+        g.toggle_physics(True)  # Triggering the toggle_physics() method allows for more fluid graph interactions
+        # g.barnes_hut()
+        g.repulsion()
+        # g.show_buttons(filter_=['nodes', 'edges', 'physics'])
+        g.show_buttons(filter_=['physics'])
+
+        # structure_graph = self.getStructureGraph()
+        # g.from_nx(structure_graph, default_node_size=node_size, )
+
+        for node_name in self.node_names:
+            g.add_node(node_name, label=node_name, labelHighlightBold=False, shape='circle')
+
+        for i, f in enumerate(self.functions):
+            for s in f.symbols:
+                g.add_edge(str(s), self.node_names[i], physics=False, title=str(f))
+
+        # Creating folders if necessary
+        if filepath[-1] == '\\' or filepath[-1] == '/':
+            filepath = filepath[:-1]
+
+        folder = os.path.dirname(filepath)
+        filename = os.path.basename(filepath)
+
+        # The filename extension must be .html
+        name, extension = os.path.splitext(filename)
+        if extension != '.html':
+            if extension == '':
+                print('Warning: Filename without extension. The required .html extension is added.')
+            else:
+                print('Warning: Inappropriate filename extension. Replacing it with .html')
+            filename = name + '.html'
+
+        if folder != '' and not os.path.exists(folder):
+            os.makedirs(folder)
+
+        path_str = os.path.join(folder, filename)
+        g.show(path_str)
+
+        print(f"Interactive structure graph saved in HTML format to {path_str}")
 
     """
         This function creates the BDD representation of the transition matrix T of the given block.
@@ -611,7 +686,8 @@ class BN_Realisation:
            functions (list[Function]): list of the update functions of the block nodes.
 
         Returns: The BDD representation of the local transition matrix of the given block. 
-        """
+    """
+
     def __create_bdd_from_boolean_network(self,
                                           nodes: list,
                                           nodes_next: list,
@@ -621,8 +697,9 @@ class BN_Realisation:
         # T represents the transition matrix of BN.
         T_loc = self.__bdd.false
 
-        print("Constructing BDD encoded transition system of the BN ...", end='', flush=True)
-        for i in tqdm(range(len(nodes))):
+        # print("Constructing BDD encoded transition system of the BN ...", end='', flush=True)
+        # for i in tqdm(range(len(nodes))):
+        for i in range(len(nodes)):
             # Initial conditions for R_i.
             R_i = self.__bdd.true
 
@@ -635,14 +712,13 @@ class BN_Realisation:
                     R_i &= eq(self.__bdd.var(nodes_next[j]), functions[j])
 
             T_loc |= R_i
-            
+
             if not CUDD_LOADED:
                 self.__bdd.collect_garbage()
 
-        print('done.', flush=True)
+        # print('done.', flush=True)
 
         return T_loc
-
 
     """
         This function finds all SCC of the BN and prepare all technical containers needed in 
@@ -651,6 +727,7 @@ class BN_Realisation:
         Returns:
             all_blocks (dict): dict holding the block_number -> (SCC_nodes : set, block_control_nodes : set).
     """
+
     def __create_blocks(self):
         G = self.getStructureGraph()
         SCC_generator = nx.strongly_connected_components(G)
@@ -693,7 +770,6 @@ class BN_Realisation:
 
         return blocks
 
-
     """
         Computes the attractors by explicitly constructing the state transition graph.
 
@@ -712,7 +788,8 @@ class BN_Realisation:
                 each value is a list of its states. The keys are strings of the form 'Ai', where *i* is 
                 a consecutive number starting from 0, identifying each attractor.
     """
-    def getAttractors(self, excludedNodes : list[str] = []) -> dict[str, list[tuple[int, ...]]]:
+
+    def getAttractors(self, excludedNodes: list[str] = []) -> dict[str, list[tuple[int, ...]]]:
         GBn = self.generateStateTransitionGraph(excludedNodes)
 
         attractors = dict()
@@ -721,9 +798,22 @@ class BN_Realisation:
 
         return attractors
 
-    @staticmethod
-    def getAttractorsMonteCarlo(file):
-        pbn = bang.load_from_file(file, "assa")
+    def getAttractorsMonteCarlo(self):
+        var_indices = {var: i for i, var in enumerate(self.node_names)}
+        parent_variables = [sorted([var_indices[var.__str__()] for var in f.symbols]) for f in self.functions]
+        truth_tables = [[y for _, y in
+                         truth_table(self.functions_str[i], [x.__str__() for x in self.functions[i].symbols])] for
+                        i in range(self.num_nodes)]
+
+        pbn = bang.PBN(self.num_nodes,
+                       [1 for _ in range(self.num_nodes)],
+                       [len(f.symbols) for f in self.functions],
+                       truth_tables,
+                       parent_variables,
+                       [[1.] for _ in range(self.num_nodes)],
+                       0.,
+                       [],
+                       n_parallel=min(max(77, self.num_nodes * 10), 2 ** self.num_nodes - 1))
         pbn._n_parallel = min(max(77, pbn.n_nodes * 10), 2 ** pbn.n_nodes - 1)
         pbn.device = "gpu"
 
@@ -738,6 +828,7 @@ class BN_Realisation:
         must correspond to the order of the nodes.
     :param str mode: The update scheme for the Boolean network. Must be either 'asynchronous' or 'synchronous'.
     """
+
     def __init__(self, list_of_nodes: list[str],
                  list_of_functions: list[str], mode: str = "asynchronous"):
         if mode not in ['asynchronous', 'synchronous']:
@@ -816,7 +907,6 @@ class BN_Realisation:
         # block_number -> (SCC : set of name_node, control_nodes : set).
         self.blocks = self.__create_blocks()
 
-
     # Technical function checking if the block is an elementary block,
     # i.e. if it does not have any parent blocks.
     def __is_elementary_block(self, all_parents):
@@ -836,7 +926,8 @@ class BN_Realisation:
 
       Returns:
           Function: the bdd expressions corresponding to the states given in models.
-      """
+    """
+
     def __bdd_representation_of_boolean_state(self, models: dict):
         # Initial value for the rule representing models dictionary.
         rule = self.__bdd.true
@@ -849,6 +940,58 @@ class BN_Realisation:
             else:
                 rule = self.__bdd.apply("and", rule, self.__bdd.var(variable))
         return rule
+
+    """
+    For a given list of initial binary states this function will create to each of them 
+    a bdd logical expression wich corresponds to that state. For example 
+    Initial_Set = [[1, 0, 0], [1,1,1]]. Then the output will be the list 
+    of bdd's of the expressions: (x1 & ~x2 & ~x3), (x1 & x2 & x3), i.e. array  
+    [bdd(x1 & ~x2 & ~x3), bdd(x1 & x2 & x3)]. 
+    This function is needed in method "push_forward_with_BDD" to create initial
+    set of bdd's corresponding to the states given by the user for further propagation 
+    through the BDD describing whole Boolean Network. 
+ 
+    Args:
+        Initial_Set (list[list[int], ...]): list of binary lists of the same length representing some Boolean states
+                                            of the Boolean Network.
+        direction (string):                 technical string which is "forward" if the output is served for 
+                                            searching image of some state and "backward" for the pre image of 
+                                            some Boolean state.
+    Returns:
+        list: list of bdd's expressions corresponding to the states given in 
+              Initial_Set.
+    """
+
+    def __bdd_representation_of_boolean_states(self,
+                                               Initial_Set: list[list[int]],
+                                               direction="forward") -> list:
+        if direction == "forward":
+            variables = self.node_names
+        elif direction == "backward":
+            variables = self.next_variables
+        else:
+            raise ValueError("The direction argument must be 'forward' or 'backward'")
+
+        expressions = []
+
+        for state in Initial_Set:
+            # Initial condition for the rule which will correspond to
+            # the fixed state in Initial_Set.
+            rule = self.__bdd.true
+
+            # Go through bits and if the bit is 1 then add to the rule operand "& var_name".
+            # If bit is zero then add to the rule operand "&~var_name.
+            # Note: dd library allows us to use different method for that, but it is much safer
+            # to do it with bdd.apply method as shown below. This method allows one to use for
+            # example 'xor' operators while other methods in dd library does not.
+            for i, bit in enumerate(state):
+                if bit == 0:
+                    rule = self.__bdd.apply('and', rule, ~self.__bdd.var(variables[i]))
+                else:
+                    rule = self.__bdd.apply('and', rule, self.__bdd.var(variables[i]))
+            expressions.append(rule)
+
+        return expressions
 
     """
         This function will find some attractor state reachable from the node v. This is the 
@@ -873,6 +1016,7 @@ class BN_Realisation:
                                              to be empty.
             all_values: list of nodes representing nodes which currently are in the processed block. 
     """
+
     def __hybrid_tarjan_recursive(self, v: Function, T_loc: Function, index: list, attractor_node: list,
                                   all_values: list):
         if attractor_node:
@@ -937,12 +1081,43 @@ class BN_Realisation:
         Returns:
             A bdd representation of the attractor node reachable from the given state.
     """
+
     def find_some_attractor_state_from_fixed_state(self, bdd_of_init_state, T_loc, all_values):
         index = [0]
         attractor_node = []
         self.__hybrid_tarjan_recursive(bdd_of_init_state, T_loc, index, attractor_node, all_values)
 
         return attractor_node[0]
+
+    """
+        For a given BDD representation of the BN state (or states) this function
+        will compute all states reachable from this state (or states) in one step. The output 
+        will be also of the BDD representation. 
+
+        Args:
+            state (Function): the BDD representation of state or multiple states.  
+        Returns:
+            Function: the BDD representation of all states reachable from this state in one step 
+                      through the BN. 
+    """
+
+    def __one_step_image_monolithic(self, state: Function) -> Function:
+        # if direction == "forward":
+        #    nodes = self.node_names # x
+        #    rename_vars = self.x_next_to_x # x_next -> x
+        # elif direction == "backward":
+        #    nodes = self.next_variables # x_next
+        #    rename_vars = self.x_to_x_next # x -> x_next
+        # else:
+        #    raise ValueError(f"Wrong direction: {direction}")
+
+        # T = self.bdd_transition_matrix
+        T = self.__create_bdd_from_boolean_network(self.node_names, self.next_variables, self.bdd_expressions)
+        transition_image = state & T
+        image = self.__bdd.exist(self.node_names, transition_image)
+        image_renamed = self.__bdd.let(self.x_next_to_x, image)
+
+        return image_renamed
 
     """
         For a given BDD representation of the BN state (or states) this function
@@ -961,6 +1136,7 @@ class BN_Realisation:
             Function: the BDD representation of all states reachable from this state in one step 
                       through the BN. 
         """
+
     def _one_step_image(self,
                         T_loc: Function,
                         all_block_variables: list,
@@ -1001,6 +1177,7 @@ class BN_Realisation:
         Returns: 
             list[Function]: list of BDD's representations of all attractors. 
     """
+
     def __find_all_attractors_in_scc_block(self, T_loc,
                                            all_block_variables: list,
                                            all_space=None):
@@ -1088,6 +1265,7 @@ class BN_Realisation:
         For a given set of nodes it will return the list of bdd rules which prevents this variables to change. 
         This simulates the asynchronous mode. 
     """
+
     def __create_non_movers_conditions_for_variables_set(self, variables_set: set):
         eq = lambda a, b: ~self.__bdd.apply('xor', a, b)
         R = []
@@ -1112,6 +1290,7 @@ class BN_Realisation:
         Returns:
             (T_new_merged, merged_attractors): (Function, list[Function] of the length n * m). 
     """
+
     def __merge_elementary_blocks(self, all_attractors: list[Function],
                                   T_merged: Function,
                                   all_variables: set,
@@ -1239,6 +1418,7 @@ class BN_Realisation:
                                          If all_space_constraint is not None then the result will be
                                          additionally cut to that space. 
     """
+
     def find_all_attractors(self, all_space_constraints=None, path_to_file=None, filename=None):
         start_time = time.time()
         sys.setrecursionlimit(self._RECURSION_LIMIT)
@@ -1430,7 +1610,8 @@ class BN_Realisation:
             filename_1 = filename + "_dict_representation.txt"
             filename_2 = filename + "_list_representation.txt"
 
-        with open(os.path.join(path_to_file, filename_1), "w") as f, open(os.path.join(path_to_file, filename_2), "w") as g:
+        with open(os.path.join(path_to_file, filename_1), "w") as f, open(os.path.join(path_to_file, filename_2),
+                                                                          "w") as g:
             g.write(f"The order is {self.node_names}")
             # all_attractors = [(T, A1), (T2, A2), .... , ], Ti - transition matrix of
             # merged blocks realisation, Ai - the final attractor in this realisation.
@@ -1496,6 +1677,7 @@ class BN_Realisation:
 
       Returns: string representing modified boolean function.
     """
+
     def remove_edge(self, source_node: str, target_node: str) -> str:
 
         # Function which returns index such that list_of_names[index] = name_to_find.
@@ -1656,7 +1838,8 @@ class BN_Realisation:
 
         Returns:
             list[Function]: the list of all attractors reachable from the push_forward(init_state, number_of_steps, modified BN).
-        """
+    """
+
     def forward_edgetics(self,
                          source_node: str,
                          target_node: str,
@@ -1666,9 +1849,10 @@ class BN_Realisation:
         # Remove the edge between source_node and remove_node.
         self.remove_edge(source_node, target_node)
 
-        self.draw_state_transition_graph(os.path.join("models", "custom_models", "original_transition_matrix_modyfied.png"),
-                                         selected_node=init_state,
-                                         transient_state_color="white")
+        # For testing
+        # self.draw_state_transition_graph(os.path.join("models", "custom_models", "original_transition_matrix_modyfied.png"),
+        #                                  selected_node=init_state,
+        #                                  transient_state_color="white")
 
         # Create the copy of number of steps for further printing.
         n = number_of_steps
@@ -1677,7 +1861,7 @@ class BN_Realisation:
 
         # Create a BDD representation of init_state.
         bdds_of_init_states = self.__bdd_representation_of_boolean_state(models)
-        #bdd_of_init_states = self.__bdd.false
+        # bdd_of_init_states = self.__bdd.false
 
         # for state_bdd in bdds_of_init_states:
         #     bdd_of_init_states = bdd_of_init_states | state_bdd
@@ -1760,10 +1944,96 @@ class BN_Realisation:
 
         return attractors
 
+    # For testing only - undocumented: Get the set of attractors reachable from the given set of states.
+    def __get_reachable_attractors(self, states: list[tuple[int, ...]], withTransientStates: bool = False):
+        attractors = self.getAttractors()
+        # attractors = self._enumerate_attractors(self.find_all_attractors())
 
+        attractor_states = set()
+        state2attr_dict = dict()
 
+        for attractor_key in attractors.keys():
+            attractor = attractors[attractor_key]
+            attractor_states.update(attractor)
 
+            for attrState in attractor:
+                state2attr_dict[attrState] = attractor_key
 
+        reachableAttractors = set()
+        current_states = set(states)
+        processed_states = set()
+        while len(current_states) != 0:
+            next_states = set()
 
+            for state in current_states:
+                next_states.update(self.getNeighborStates(state))
+                processed_states.add(state)
 
+            next_states_bin = set([state2bin(s) for s in next_states])
+            for state_bin in next_states_bin.intersection(attractor_states):
+                reachableAttractors.add(state2attr_dict[state_bin])
+                next_states_bin.remove(state_bin)
 
+            current_states = set([bin2state(s) for s in next_states_bin]).difference(processed_states)
+
+        attractor_states = set()
+        for attractor_key in reachableAttractors:
+            attractor_states = attractor_states.union(attractors[attractor_key])
+
+        if withTransientStates:
+            transient_states_bin = set([state2bin(s) for s in processed_states]).difference(attractor_states)
+            # return reachableAttractors, transient_states_bin
+            return attractor_states, transient_states_bin
+
+        # return reachableAttractors
+        return attractor_states
+
+    """
+
+    """
+
+    def get_reachable_attractors_with_bdd(self, states: list[tuple[int, ...]]) -> dict[str, set[str]]:
+
+        states_bdd = self.__bdd.false
+        for state_bdd in self.__bdd_representation_of_boolean_states([list(s) for s in states]):
+            states_bdd = states_bdd | state_bdd
+        # print(f"Size of BDD manager before garbage collection: {len(self.__bdd)}")
+        if not CUDD_LOADED:
+            self.__bdd.collect_garbage()
+        # print(f"Size of BDD manager after garbage collection: {len(self.__bdd)}")
+
+        # Searching for the forward image.
+        whole_forward_image = states_bdd
+        remember_last_image = states_bdd
+
+        while True:
+            # ToDo: Consider decomposition-based implementation (?)
+            one_step_forward_image = self.__one_step_image_monolithic(remember_last_image)
+            forward_image_constructor = whole_forward_image | one_step_forward_image
+
+            if whole_forward_image == forward_image_constructor:
+                break
+
+            whole_forward_image = forward_image_constructor
+            remember_last_image = one_step_forward_image
+
+        # Create all_space.
+        all_space = whole_forward_image
+
+        # bdd.reorder(self.__bdd, self.custom_order)
+        # Find all attractors in all_space.
+        attractors = self.find_all_attractors(all_space_constraints=all_space)
+
+        return self._enumerate_attractors(attractors)
+
+    def get_reachable_attractors_with_edge_removed(self, source_node, target_node, n_steps, initial_state) -> dict[
+        str, set[str]]:
+        # reachable_attractors = []
+
+        attr_from_s = self._enumerate_attractors(
+            self.forward_edgetics(source_node, target_node, n_steps, initial_state))
+
+        # for attr in attr_from_s.values():
+        #    reachable_attractors.append(attr)
+
+        return attr_from_s

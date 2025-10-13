@@ -2,4 +2,8 @@ absl-py
 markdown-it-py
 pyvis
 bang-gpu
+matplotlib
+sympy
+boolean
+tqdm
 

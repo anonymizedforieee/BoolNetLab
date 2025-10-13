@@ -1,0 +1,11 @@
+.idea/
+BoolNetLab.zip
+
+*__pycache__/
+notes.txt
+*.ispl
+*.DS_Store
+*attractors_dict_representation.txt
+*attractors_list_representation.txt
+*saved_models/
+*aux/
