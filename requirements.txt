@@ -4,6 +4,6 @@ pyvis
 bang-gpu
 matplotlib
 sympy
-boolean
+boolean-py
 tqdm
 
