@@ -798,7 +798,20 @@ class BN_Realisation:
 
         return attractors
 
-    def getAttractorsMonteCarlo(self):
+    def getAttractorsMonteCarlo(self, n_parallel=-1, burn_in_len=1100, history_len=1300, print_result=False):
+        """
+        This function uses MonteCarlo simulations to detect pseudoattractors.
+
+        Args:
+            n_parallel: number of parallel simulations.
+            burn_in_len: lenght of trajectories that will be discarded as random and non relevant in detection.
+            history_len: length of trajectories that will be used to classify states into pseudoattractors.
+
+        Returns:
+            list of pseudoattractor states
+        """
+        if n_parallel == -1:
+            n_parallel = min(max(77, self.num_nodes * 10), 2 ** self.num_nodes - 1)
         var_indices = {var: i for i, var in enumerate(self.node_names)}
         parent_variables = [sorted([var_indices[var.__str__()] for var in f.symbols]) for f in self.functions]
         truth_tables = [[y for _, y in
@@ -813,12 +826,13 @@ class BN_Realisation:
                        [[1.] for _ in range(self.num_nodes)],
                        0.,
                        [],
-                       n_parallel=min(max(77, self.num_nodes * 10), 2 ** self.num_nodes - 1))
-        pbn._n_parallel = min(max(77, pbn.n_nodes * 10), 2 ** pbn.n_nodes - 1)
+                       n_parallel=n_parallel)
         pbn.device = "gpu"
 
-        attractors = pbn.monte_carlo_detect_attractors(trajectory_length=1100, attractor_length=1300)
-        print(attractors)
+        attractors = pbn.monte_carlo_detect_attractors(trajectory_length=burn_in_len, attractor_length=history_len)
+        if print_result:
+            print(attractors)
+        return attractors
 
     """
     Constructor for the Boolean Network (BN_Realisation) class.
