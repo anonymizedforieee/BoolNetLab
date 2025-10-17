@@ -742,7 +742,7 @@ class PBN:
             list of attractors where attractors are coded as lists of lists of bools, lists of bools representing the states.
 
         """
-        attractors = monte_carlo(self, trajectory_length, attractor_length)
+        attractors = monte_carlo(self, trajectory_length, attractor_length, threshold=threshold)
 
         if repr == "bool":
             return attractors
