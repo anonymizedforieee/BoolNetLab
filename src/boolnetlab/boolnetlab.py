@@ -825,18 +825,10 @@ class BN_Realisation:
 
         return attractors
 
+    def getAttractorsMonteCarlo(
+            self, n_parallel=-1, burn_in_len=1100, history_len=1300, print_result=False, threshold=0.15
+    ):
 
-    # @staticmethod
-    # def getAttractorsMonteCarlo(file):
-    #     pbn = bang.load_from_file(file, "assa")
-    #     pbn._n_parallel = min(max(77, pbn.n_nodes * 10), 2 ** pbn.n_nodes - 1)
-    #     pbn.device = "gpu"
-
-    #     attractors = pbn.monte_carlo_detect_attractors(trajectory_length=1100, attractor_length=1300)
-    #     print(attractors)
-
-
-    def getAttractorsMonteCarlo(self, n_parallel=-1, burn_in_len=1100, history_len=1300, print_result=False):
         """
         This function uses MonteCarlo simulations to detect pseudoattractors.
 
@@ -867,7 +859,8 @@ class BN_Realisation:
                        n_parallel=n_parallel)
         pbn.device = "gpu"
 
-        attractors = pbn.monte_carlo_detect_attractors(trajectory_length=burn_in_len, attractor_length=history_len)
+        attractors = pbn.monte_carlo_detect_attractors(trajectory_length=burn_in_len, attractor_length=history_len,
+                                                       threshold=threshold)
         if print_result:
             print(attractors)
 
