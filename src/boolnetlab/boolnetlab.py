@@ -22,22 +22,19 @@ from functools import cache
 
 try:
     import dd.cudd as bdd
-
     CUDD_LOADED = True
 except ImportError:
     print("""WARNING: The dd.cudd module of the dd package, which provides Cython bindings to the CUDD library in C,
          is not compiled and cannot be loaded. Please refer to https://github.com/tulip-control/dd for
          installation instructions. Falling back to dd.autoref, which wraps the pure-Python Binary
          Decision Diagrams implementation dd.bdd."""
-          )
+    )
     import dd.autoref as bdd
-
     CUDD_LOADED = False
 
 from dd.autoref import Function
 from tqdm import tqdm
 import sys
-
 
 class BN_Realisation:
     __bool_algebra = bool.BooleanAlgebra()
@@ -49,6 +46,9 @@ class BN_Realisation:
     _RECURSION_LIMIT = 1000000
     _GET_SCC = 0
     _GET_CONTROL_NODES = 1
+    _CONVERTED_TRUE_IN_BOOLEAN_PY_TO_STRING = "1"
+    _CONVERTED_FALSE_IN_BOOLEAN_PY_TO_STRING = "0"
+    _FIRST_VARIABLE_NAME_IN_ISPL_FILE = 0
 
     @staticmethod
     def __generateRandomBooleanFunction(parents):
@@ -69,6 +69,7 @@ class BN_Realisation:
             num_ps = len(bool_formula.atoms())
 
         return fun, is_fixed, num_ps
+
 
     def getInputNodeNames(self):
 
@@ -91,7 +92,6 @@ class BN_Realisation:
     """
     Dodać description (Andrzej).
     """
-
     def save_ispl(self, filepath: str, initial_condition: str = None, verbose: bool = True) -> None:
 
         if verbose:
@@ -125,8 +125,14 @@ class BN_Realisation:
 
             file.write('\tEvolution:\n')
             for node_name, fun in zip(self.node_names, self.functions):
-                file.write('\t\t' + node_name + '=true if ' + str(fun) + '=true;\n')
-                file.write('\t\t' + node_name + '=false if ' + str(fun) + '=false;\n')
+                if str(fun) == '1':
+                    fun_str = '(' + node_name + '|~' + node_name + ')'
+                elif str(fun) == '0':
+                    fun_str = '(' + node_name + '&~' + node_name + ')'
+                else:
+                    fun_str = str(fun)
+                file.write('\t\t' + node_name + '=true if ' + fun_str + '=true;\n')
+                file.write('\t\t' + node_name + '=false if ' + fun_str + '=false;\n')
             file.write('\tend Evolution\n')
 
             file.write('end Agent\n')
@@ -153,6 +159,7 @@ class BN_Realisation:
         if verbose:
             print('done.')
 
+
     """
      This function reads variables, update functions from the ispl file.
 
@@ -161,7 +168,6 @@ class BN_Realisation:
      Returns:
         BN_Realisation object which has nodes and functions from the ispl file.
     """
-
     @classmethod
     def load_ispl(cls, path_to_ispl_file: str):
         if not os.path.isfile(path_to_ispl_file):
@@ -201,12 +207,12 @@ class BN_Realisation:
                     line = ispl_file.readline()
                 break
 
-        assert len(BN_variables) == len(
-            BN_functions), "The number of nodes does not match the number of Boolean functions."
+        assert len(BN_variables) == len(BN_functions), "The number of nodes does not match the number of Boolean functions."
 
         print(f"Loaded a Boolean network of {len(BN_variables)} nodes.")
 
         return BN_Realisation(BN_variables, BN_functions)
+
 
     @classmethod
     def generate_random_bn(cls, num_nodes: int, max_parent_nodes: int, min_parent_nodes: int = 1,
@@ -284,6 +290,7 @@ class BN_Realisation:
 
         return bn
 
+
     """
     Generates a state transition graph for the Boolean network.
 
@@ -294,7 +301,6 @@ class BN_Realisation:
      Returns:
         networkx.Graph: A NetworkX graph object representing the state transition graph.
     """
-
     def generateStateTransitionGraph(self, excludedNodes: list[str] = []) -> nx.Graph:
         G = nx.DiGraph()
 
@@ -309,6 +315,7 @@ class BN_Realisation:
             G.add_edges_from(edges_aux)
 
         return G
+    
 
     """
         Returns the set of neighboring states for a given state under the current update mode of the Boolean network.
@@ -323,7 +330,6 @@ class BN_Realisation:
         Returns:
             set[tuple[int, ...]]: A set of neighboring states.
     """
-
     def getNeighborStates(self, state: tuple[int, ...], excludedNodes: list[str] = []) -> set[tuple[int, ...]]:
         neighborStates = []
 
@@ -358,6 +364,7 @@ class BN_Realisation:
 
         return set(tuple(neighborState) for neighborState in neighborStates)
 
+
     """
     This method extracts attractors from their compressed BDD representations and converts them into an explicit form.
 
@@ -371,7 +378,6 @@ class BN_Realisation:
         of the form 'Ai', where i is a consecutive number starting from 0, identifying each attractor.
     
     """
-
     def _enumerate_attractors(self, all_attractors: list[Function]) -> dict[str, set[str]]:
 
         attractors = dict()
@@ -388,6 +394,7 @@ class BN_Realisation:
 
         return attractors
 
+
     """
         Parameters
         ----------
@@ -397,32 +404,45 @@ class BN_Realisation:
         'plain', 'plain-ext', 'png', 'ps', 'ps2', 'svg', 'svgz', 'vml', 'vmlz', 'vrml', 'vtx', 'wbmp',
         'xdot', 'xlib' (note that not all may be available on every system depending on how Graphviz was built).
         
-        selected_node: selected node to be highlighted in the graph.
-        
         layout: Layout to be used for visualisation of the state transition graph. Available layouts are:
         'neato', 'dot' (default), 'twopi', 'circo', 'fdp', and 'nop'.
     
-        highlight_attractors: Indicates whether the attractors should be highlighted with colors. If set to True, the non-attractor states are colored by default with the chartreuse color from the mcolors.CSS4_COLORS palette (this can be changed with setting the transient_state_color option), while states of an attractor are colored by a randomly selected color from the palette or by a color from the provided color_names list.
+        highlight_attractors: Indicates whether the attractors should be highlighted with colors. If set to True,
+            the non-attractor states are colored by default with the chartreuse color from the mcolors.CSS4_COLORS
+            palette (this can be changed with setting the transient_state_color option), while states of an attractor
+            are colored by a randomly selected color from the palette or by a color from the provided color_names list.
     
-        use_bdds: If True (default), the attractors are computed with symbolic operations on Binary Decision Diagrams. Otherwise, NetworkX attracting_components function is used. This option is ignored if highlight_attractors is False.
+        use_bdds: If True (default), the attractors are computed with symbolic operations on Binary Decision Diagrams.
+            Otherwise, NetworkX attracting_components function is used. This option is ignored if highlight_attractors
+            is False.
     
-        color_names: An optional list of color names from the mcolors.CSS4_COLORS palette to be used for coloring attractors. Colors are used one after another to color the attractors. If the number of color names is smaller than the number of attractors, more than one attractor will have the same color. At least one color name must be provided. This option is ignored if highlight_attractors is False.
+        color_names: An optional list of color names from the mcolors.CSS4_COLORS palette to be used for coloring
+            attractors. Colors are used one after another to color the attractors. If the number of color names is
+            smaller than the number of attractors, more than one attractor will have the same color. At least one color
+            name must be provided. This option is ignored if highlight_attractors is False.
     
-        transient_state_color: Name of the color in the mcolors.CSS4_COLORS palette to be used for coloring non-attractor states. The default value is 'chartreuse'. This option is ignored if highlight_attractors is False.
+        transient_state_color: Name of the color in the mcolors.CSS4_COLORS palette to be used for coloring non-attractor
+            states. The default value is 'chartreuse'. This option is ignored if highlight_attractors is False.
+
+        selected_state_groups (list[list[tuple[int, ...]]]): A list of groups of states to be highlighted in the graph.
+            Each group is a list of states.
+
+        selected_group_colors (list[str]): Color names for each group of selected states. The number of colors must be
+            same as the number of groups in selected_state_groups.
     
         Returns
         -------
         None
     """
-
     def draw_state_transition_graph(self,
                                     filepath: str,
-                                    selected_node=None,
                                     layout: str = 'dot',
                                     highlight_attractors: bool = True,
-                                    use_bdds=True,
+                                    use_bdds: bool = True,
                                     color_names: list[str] = None,
                                     transient_state_color: str = 'chartreuse',
+                                    selected_state_groups: list[list[tuple[int, ...]]] = [],
+                                    selected_group_colors: list[str] = [],
                                     ) -> None:
         RANDOM_COLORS = color_names is None
 
@@ -468,10 +488,15 @@ class BN_Realisation:
                     n = Dbn.get_node(state)
                     n.attr['fillcolor'] = color
 
-            if selected_node:
-                selected_node = utils.state2bin(selected_node)
-                n = Dbn.get_node(selected_node)
-                n.attr['fillcolor'] = 'red'
+            if len(selected_state_groups) > 0:
+
+                assert len(selected_state_groups) == len(selected_group_colors), "Wrong number of colors in selected_group_colors!"
+
+                for color, selected_group in zip(selected_group_colors, selected_state_groups):
+                    for selected_state in [utils.state2bin(selected_state) for selected_state in selected_group]:
+                        n = Dbn.get_node(selected_state)
+                        n.attr['fillcolor'] = color
+        
         Dbn.layout(layout)
 
         # Creating folders if necessary
@@ -489,6 +514,7 @@ class BN_Realisation:
 
         print(f"Done. The state transition graph is saved to {os.path.join(folder, filename)}")
 
+
     """
         This method constructs an interaction graph for the Boolean network, where each edge represents
         a dependence of the target node on the source node. The dependency is determined syntactically
@@ -500,11 +526,13 @@ class BN_Realisation:
          A NetworkX graph object representing the state transition graph.
 
     """
-
     @cache
     def getStructureGraph(self):
 
         G = nx.DiGraph()
+
+        for node in self.node_names:
+            G.add_node(node)
 
         edges_aux = []
         for i, f in enumerate(self.functions):
@@ -515,6 +543,7 @@ class BN_Realisation:
         G.add_edges_from(edges_aux)
 
         return G
+
 
     """
         Plots structure graph of the BN
@@ -528,7 +557,6 @@ class BN_Realisation:
         -------
         None
     """
-
     def plot_structure_graph(self, layout: str = 'spring') -> None:
         struct_graph = self.getStructureGraph()
 
@@ -558,6 +586,7 @@ class BN_Realisation:
 
         plt.show()
 
+
     """
         Plots the structure graph of a Boolean network using PyGraphviz and save the image in a file of specified format provided by the file extension.
     
@@ -576,7 +605,6 @@ class BN_Realisation:
         -------
         None
     """
-
     def plot_structure_graph_pgv(self, filepath: str, layout: str = 'dot') -> None:
         struct_graph = nx.drawing.nx_agraph.to_agraph(self.getStructureGraph())
         struct_graph.layout(layout)
@@ -594,6 +622,7 @@ class BN_Realisation:
         # struct_graph is an instant of the PyGraphviz.AGraph class
         struct_graph.draw(os.path.join(folder, filename))
 
+
     """
         Makes an interactive graph of the BN structure in HTML format.
 
@@ -608,14 +637,12 @@ class BN_Realisation:
         -------
         None
     """
-
-    def plot_structure_graph_interactive(self, filepath: str, node_size: int = 20, height: int = 500,
-                                         width: int = 500) -> None:
+    def plot_structure_graph_interactive(self, filepath: str, node_size: int = 20, height: int = 500, width: int = 500) -> None:
 
         g = Network(height=height, width=width, directed=True, notebook=True, cdn_resources='in_line')
         g.toggle_hide_edges_on_drag(False)
         g.toggle_physics(True)  # Triggering the toggle_physics() method allows for more fluid graph interactions
-        # g.barnes_hut()
+        #g.barnes_hut()
         g.repulsion()
         # g.show_buttons(filter_=['nodes', 'edges', 'physics'])
         g.show_buttons(filter_=['physics'])
@@ -654,6 +681,7 @@ class BN_Realisation:
 
         print(f"Interactive structure graph saved in HTML format to {path_str}")
 
+
     """
         This function creates the BDD representation of the transition matrix T of the given block.
 
@@ -687,7 +715,6 @@ class BN_Realisation:
 
         Returns: The BDD representation of the local transition matrix of the given block. 
     """
-
     def __create_bdd_from_boolean_network(self,
                                           nodes: list,
                                           nodes_next: list,
@@ -697,8 +724,8 @@ class BN_Realisation:
         # T represents the transition matrix of BN.
         T_loc = self.__bdd.false
 
-        # print("Constructing BDD encoded transition system of the BN ...", end='', flush=True)
-        # for i in tqdm(range(len(nodes))):
+        #print("Constructing BDD encoded transition system of the BN ...", end='', flush=True)
+        #for i in tqdm(range(len(nodes))):
         for i in range(len(nodes)):
             # Initial conditions for R_i.
             R_i = self.__bdd.true
@@ -712,13 +739,14 @@ class BN_Realisation:
                     R_i &= eq(self.__bdd.var(nodes_next[j]), functions[j])
 
             T_loc |= R_i
-
+            
             if not CUDD_LOADED:
                 self.__bdd.collect_garbage()
 
-        # print('done.', flush=True)
+        #print('done.', flush=True)
 
         return T_loc
+
 
     """
         This function finds all SCC of the BN and prepare all technical containers needed in 
@@ -727,7 +755,6 @@ class BN_Realisation:
         Returns:
             all_blocks (dict): dict holding the block_number -> (SCC_nodes : set, block_control_nodes : set).
     """
-
     def __create_blocks(self):
         G = self.getStructureGraph()
         SCC_generator = nx.strongly_connected_components(G)
@@ -770,6 +797,7 @@ class BN_Realisation:
 
         return blocks
 
+
     """
         Computes the attractors by explicitly constructing the state transition graph.
 
@@ -788,7 +816,6 @@ class BN_Realisation:
                 each value is a list of its states. The keys are strings of the form 'Ai', where *i* is 
                 a consecutive number starting from 0, identifying each attractor.
     """
-
     def getAttractors(self, excludedNodes: list[str] = []) -> dict[str, list[tuple[int, ...]]]:
         GBn = self.generateStateTransitionGraph(excludedNodes)
 
@@ -798,9 +825,18 @@ class BN_Realisation:
 
         return attractors
 
-    def getAttractorsMonteCarlo(
-            self, n_parallel=-1, burn_in_len=1100, history_len=1300, print_result=False, threshold=0.15
-    ):
+
+    # @staticmethod
+    # def getAttractorsMonteCarlo(file):
+    #     pbn = bang.load_from_file(file, "assa")
+    #     pbn._n_parallel = min(max(77, pbn.n_nodes * 10), 2 ** pbn.n_nodes - 1)
+    #     pbn.device = "gpu"
+
+    #     attractors = pbn.monte_carlo_detect_attractors(trajectory_length=1100, attractor_length=1300)
+    #     print(attractors)
+
+
+    def getAttractorsMonteCarlo(self, n_parallel=-1, burn_in_len=1100, history_len=1300, print_result=False):
         """
         This function uses MonteCarlo simulations to detect pseudoattractors.
 
@@ -831,11 +867,19 @@ class BN_Realisation:
                        n_parallel=n_parallel)
         pbn.device = "gpu"
 
-        attractors = pbn.monte_carlo_detect_attractors(trajectory_length=burn_in_len, attractor_length=history_len,
-                                                       threshold=threshold)
+        attractors = pbn.monte_carlo_detect_attractors(trajectory_length=burn_in_len, attractor_length=history_len)
         if print_result:
             print(attractors)
-        return attractors
+
+        attractors_dict = dict()
+        for i, attractor in enumerate(attractors):
+            attractors_dict['A'+str(i)] = set()
+            for state in attractor:
+                state_str = ''.join(['1' if val else '0' for val in state])
+                attractors_dict['A'+str(i)].add(state_str)
+        
+        return attractors_dict
+        
 
     """
     Constructor for the Boolean Network (BN_Realisation) class.
@@ -845,7 +889,6 @@ class BN_Realisation:
         must correspond to the order of the nodes.
     :param str mode: The update scheme for the Boolean network. Must be either 'asynchronous' or 'synchronous'.
     """
-
     def __init__(self, list_of_nodes: list[str],
                  list_of_functions: list[str], mode: str = "asynchronous"):
         if mode not in ['asynchronous', 'synchronous']:
@@ -924,11 +967,13 @@ class BN_Realisation:
         # block_number -> (SCC : set of name_node, control_nodes : set).
         self.blocks = self.__create_blocks()
 
+
     # Technical function checking if the block is an elementary block,
     # i.e. if it does not have any parent blocks.
     def __is_elementary_block(self, all_parents):
         return True if all_parents == set() else False
 
+ 
     """
       For a given dictionary holding "node_name": boolean value
       this function will create a bdd logical expression wich corresponds to that state. For example 
@@ -944,7 +989,6 @@ class BN_Realisation:
       Returns:
           Function: the bdd expressions corresponding to the states given in models.
     """
-
     def __bdd_representation_of_boolean_state(self, models: dict):
         # Initial value for the rule representing models dictionary.
         rule = self.__bdd.true
@@ -957,6 +1001,7 @@ class BN_Realisation:
             else:
                 rule = self.__bdd.apply("and", rule, self.__bdd.var(variable))
         return rule
+
 
     """
     For a given list of initial binary states this function will create to each of them 
@@ -978,7 +1023,6 @@ class BN_Realisation:
         list: list of bdd's expressions corresponding to the states given in 
               Initial_Set.
     """
-
     def __bdd_representation_of_boolean_states(self,
                                                Initial_Set: list[list[int]],
                                                direction="forward") -> list:
@@ -1010,6 +1054,7 @@ class BN_Realisation:
 
         return expressions
 
+
     """
         This function will find some attractor state reachable from the node v. This is the 
         main method for the "find_some_attractor_state_from_fixed_state" method below. 
@@ -1033,7 +1078,6 @@ class BN_Realisation:
                                              to be empty.
             all_values: list of nodes representing nodes which currently are in the processed block. 
     """
-
     def __hybrid_tarjan_recursive(self, v: Function, T_loc: Function, index: list, attractor_node: list,
                                   all_values: list):
         if attractor_node:
@@ -1084,6 +1128,7 @@ class BN_Realisation:
 
             return
 
+
     """
         For a give boolean state this function will find some attractor state reachable from 
         it. It uses the Hybrid Tarjan algorithm (see __hybrid_tyrjan_recursive method above).
@@ -1098,7 +1143,6 @@ class BN_Realisation:
         Returns:
             A bdd representation of the attractor node reachable from the given state.
     """
-
     def find_some_attractor_state_from_fixed_state(self, bdd_of_init_state, T_loc, all_values):
         index = [0]
         attractor_node = []
@@ -1106,35 +1150,36 @@ class BN_Realisation:
 
         return attractor_node[0]
 
+
     """
         For a given BDD representation of the BN state (or states) this function
         will compute all states reachable from this state (or states) in one step. The output 
         will be also of the BDD representation. 
 
         Args:
-            state (Function): the BDD representation of state or multiple states.  
+            states (Function): the BDD representation of state or multiple states.  
         Returns:
             Function: the BDD representation of all states reachable from this state in one step 
                       through the BN. 
     """
-
-    def __one_step_image_monolithic(self, state: Function) -> Function:
-        # if direction == "forward":
+    def __one_step_image_monolithic(self, states: Function) -> Function:
+        #if direction == "forward":
         #    nodes = self.node_names # x
         #    rename_vars = self.x_next_to_x # x_next -> x
-        # elif direction == "backward":
+        #elif direction == "backward":
         #    nodes = self.next_variables # x_next
         #    rename_vars = self.x_to_x_next # x -> x_next
-        # else:
+        #else:
         #    raise ValueError(f"Wrong direction: {direction}")
 
-        # T = self.bdd_transition_matrix
-        T = self.__create_bdd_from_boolean_network(self.node_names, self.next_variables, self.bdd_expressions)
-        transition_image = state & T
+        #T = self.bdd_transition_matrix
+        T_global = self.__create_bdd_from_boolean_network(self.node_names, self.next_variables, self.bdd_expressions)
+        transition_image = T_global & states
         image = self.__bdd.exist(self.node_names, transition_image)
         image_renamed = self.__bdd.let(self.x_next_to_x, image)
 
         return image_renamed
+
 
     """
         For a given BDD representation of the BN state (or states) this function
@@ -1153,7 +1198,6 @@ class BN_Realisation:
             Function: the BDD representation of all states reachable from this state in one step 
                       through the BN. 
         """
-
     def _one_step_image(self,
                         T_loc: Function,
                         all_block_variables: list,
@@ -1194,7 +1238,6 @@ class BN_Realisation:
         Returns: 
             list[Function]: list of BDD's representations of all attractors. 
     """
-
     def __find_all_attractors_in_scc_block(self, T_loc,
                                            all_block_variables: list,
                                            all_space=None):
@@ -1282,7 +1325,6 @@ class BN_Realisation:
         For a given set of nodes it will return the list of bdd rules which prevents this variables to change. 
         This simulates the asynchronous mode. 
     """
-
     def __create_non_movers_conditions_for_variables_set(self, variables_set: set):
         eq = lambda a, b: ~self.__bdd.apply('xor', a, b)
         R = []
@@ -1307,7 +1349,6 @@ class BN_Realisation:
         Returns:
             (T_new_merged, merged_attractors): (Function, list[Function] of the length n * m). 
     """
-
     def __merge_elementary_blocks(self, all_attractors: list[Function],
                                   T_merged: Function,
                                   all_variables: set,
@@ -1366,9 +1407,9 @@ class BN_Realisation:
 
     Consider a Boolean Network consisting of two blocks:
 
-        ___________              ____________
+         ___________              ____________
         | x1 <-> x2 |   B1       |  x3   x4  |   B2
-        |   \   /   |            |   \    /  |
+        |   \  /    |            |    \   /  |
         |    x3 ----|------------|----> x5   |
         |___________|            |___________|
 
@@ -1430,18 +1471,23 @@ class BN_Realisation:
         filename (string): string representing the file name where new found attractors are going to be saved.
                            If None then results are going to be saved to two different files:
                            "attractors_dict_representation.txt" and "attractors_list_representation.txt".
+        verbose (bool):     set to True to print details on the computation of attractors.
     Returns: 
         all_attractors (list[Function]): list of bdd's representing all attractors of the BN. 
                                          If all_space_constraint is not None then the result will be
                                          additionally cut to that space. 
     """
-
-    def find_all_attractors(self, all_space_constraints=None, path_to_file=None, filename=None):
+    def find_all_attractors(self, all_space_constraints: Function = None,
+                            path_to_file: str = None,
+                            filename: str = None,
+                            verbose: bool = False) -> list[Function]:
+        
         start_time = time.time()
         sys.setrecursionlimit(self._RECURSION_LIMIT)
 
-        print("Finding all attractors", flush=True)
-        print(f"The network has {self.number_of_blocks}", flush=True)
+        if verbose:
+            print("Finding all attractors", flush=True)
+            print(f"The network has {self.number_of_blocks}", flush=True)
 
         # Prepare containers for the further usage.
         q = deque(
@@ -1488,7 +1534,8 @@ class BN_Realisation:
 
                 # If the block is elementary block.
                 if self.__is_elementary_block(all_parents):
-                    print(f"The elementary block nr. {block_nr} is processed")
+                    if verbose:
+                        print(f"The elementary block nr. {block_nr} is processed")
 
                     # Find transition matrix of the block.
                     T_loc = self.__create_bdd_from_boolean_network(nodes=correct_order_of_block_variables,
@@ -1518,7 +1565,8 @@ class BN_Realisation:
                         # 2. For each attractor A from the previous elementary block,
                         #    combine it with each attractor B from the current elementary block
                         #    by computing their product (A & B).
-                        print("Merging elementary blocks")
+                        if verbose:
+                            print("Merging elementary blocks")
                         T_elementary_1, attractors_elementary_1 = all_attractors[0]
                         T_merged, attractors_merged = self.__merge_elementary_blocks(attractors_elementary_1,
                                                                                      T_elementary_1,
@@ -1533,7 +1581,8 @@ class BN_Realisation:
                     # Mark block variables as already processed.
                     all_variables |= block_variables
                 else:  # The block is not elementary.
-                    print(f"The non-elementary block nr {block_nr} is processed")
+                    if verbose:
+                        print(f"The non-elementary block nr {block_nr} is processed")
 
                     # Create transition matrix for non-elementary block. At this stage it does not matter
                     # the dynamic of its control nodes.
@@ -1588,7 +1637,8 @@ class BN_Realisation:
                                                                                      all_block_variables=list(
                                                                                          all_variables),
                                                                                      all_space=parent_attractor)
-                            print(f"Attractors of the block {block_nr} were found")
+                            # if verbose:
+                            #    print(f"Attractors of the block {block_nr} were found")
 
                             # Save the result.
                             new_all_attractors.append((T_new, new_attractors))
@@ -1608,64 +1658,65 @@ class BN_Realisation:
 
         # PRINTING STAFF.
         end_time = time.time()
-        print(f"All attractors are found in {int((end_time - start_time) / 60)} minutes")
+        if verbose:
+            print(f"All attractors are found in {int((end_time - start_time) / 60)} minutes")
         counter = 1
 
-        if not path_to_file:
-            path_to_file = os.getcwd()
-            print("The path to save results is not given. Results "
-                  "are going to be saved in the current directory.\n",
-                  flush=True)
-        if not filename:
-            print("The name of the file is not given. Results are going to be saved to the "
-                  "attractors_dict_representation.txt for the dict representation and "
-                  "to attractors_list_representation.txt "
-                  "for a list representation.", flush=True)
-            filename_1 = "attractors_dict_representation.txt"
-            filename_2 = "attractors_list_representation.txt"
-        else:
-            filename_1 = filename + "_dict_representation.txt"
-            filename_2 = filename + "_list_representation.txt"
+        if path_to_file or filename:        
+            if not path_to_file:
+                path_to_file = os.getcwd()
+                print("The path to save results is not given. Results "
+                    "are going to be saved in the current directory.\n",
+                    flush=True)
+            if not filename:
+                print("The name of the file is not given. Results are going to be saved to the "
+                    "attractors_dict_representation.txt for the dict representation and "
+                    "to attractors_list_representation.txt "
+                    "for a list representation.", flush=True)
+                filename_1 = "attractors_dict_representation.txt"
+                filename_2 = "attractors_list_representation.txt"
+            else:
+                filename_1 = filename + "_dict_representation.txt"
+                filename_2 = filename + "_list_representation.txt"
 
-        with open(os.path.join(path_to_file, filename_1), "w") as f, open(os.path.join(path_to_file, filename_2),
-                                                                          "w") as g:
-            g.write(f"The order is {self.node_names}")
-            # all_attractors = [(T, A1), (T2, A2), .... , ], Ti - transition matrix of
-            # merged blocks realisation, Ai - the final attractor in this realisation.
-            for _, attractor_list in all_attractors:
-                for attractor in attractor_list:
-                    f.write(f"Attractor {counter}:\n")
-                    g.write(f"Attractor {counter}:\n")
-                    f.write("=======================\n")
-                    g.write("=======================\n")
-                    print(f"Attractor nr {counter}", flush=True)
-                    counter += 1
-                    print(f"=======================")
-                    states_counter = 0
-                    # models: {name1 : True, name2 : False ,..., name_n : False}
-                    for models in self.__bdd.pick_iter(attractor, care_vars=self.node_names):
-                        state_string_dict = "{"
-                        state_string_list = "("
+            with open(os.path.join(path_to_file, filename_1), "w") as f, open(os.path.join(path_to_file, filename_2), "w") as g:
+                g.write(f"The order is {self.node_names}")
+                # all_attractors = [(T, A1), (T2, A2), .... , ], Ti - transition matrix of
+                # merged blocks realisation, Ai - the final attractor in this realisation.
+                for _, attractor_list in all_attractors:
+                    for attractor in attractor_list:
+                        f.write(f"Attractor {counter}:\n")
+                        g.write(f"Attractor {counter}:\n")
+                        f.write("=======================\n")
+                        g.write("=======================\n")
+                        print(f"Attractor nr {counter}", flush=True)
+                        counter += 1
+                        print(f"=======================")
+                        states_counter = 0
+                        # models: {name1 : True, name2 : False ,..., name_n : False}
+                        for models in self.__bdd.pick_iter(attractor, care_vars=self.node_names):
+                            state_string_dict = "{"
+                            state_string_list = "("
 
-                        for node_name in self.node_names:
-                            name, value = node_name, int(models[node_name])
-                            boolean_state = "1, " if models[node_name] else "0, "
-                            state_string_dict += name + " : " + boolean_state
-                            state_string_list += boolean_state
+                            for node_name in self.node_names:
+                                name, value = node_name, int(models[node_name])
+                                boolean_state = "1, " if models[node_name] else "0, "
+                                state_string_dict += name + " : " + boolean_state
+                                state_string_list += boolean_state
 
-                        states_counter += 1
-                        state_string_dict = state_string_dict[:-2]
-                        state_string_list = state_string_list[:-2]
-                        state_string_dict += "}"
-                        state_string_list += ")"
-                        f.write(state_string_dict + "\n")
-                        g.write(state_string_list + "\n")
-                        print(state_string_list, flush=True)
+                            states_counter += 1
+                            state_string_dict = state_string_dict[:-2]
+                            state_string_list = state_string_list[:-2]
+                            state_string_dict += "}"
+                            state_string_list += ")"
+                            f.write(state_string_dict + "\n")
+                            g.write(state_string_list + "\n")
+                            print(state_string_list, flush=True)
 
-                    print(f"Number of states: {states_counter}\n"
-                          f"-------------------", flush=True)
-                    f.write(f"Number of states {states_counter} \n")
-                    g.write(f"Number of states {states_counter} \n")
+                        print(f"Number of states: {states_counter}\n"
+                            f"-------------------", flush=True)
+                        f.write(f"Number of states {states_counter} \n")
+                        g.write(f"Number of states {states_counter} \n")
 
         # Returning attractors: one has to go through list of tuples and append
         # only bdd's representing attractors.
@@ -1690,12 +1741,14 @@ class BN_Realisation:
           source_node (string): string representing the name of the source node 
                                 from the ispl file.
           target_node (string): string representing the name of the removed node  
-          from the boolean update function corresponding to the source_node.
+          from the Boolean update function corresponding to the source_node.
+          modify_model (bool): optional flag indicating whether the edge is removed
+                               from the Boolean network or only the new function is
+                               printed.
 
-      Returns: string representing modified boolean function.
+      Returns: string representing modified Boolean function.
     """
-
-    def remove_edge(self, source_node: str, target_node: str) -> str:
+    def remove_edge(self, source_node: str, target_node: str, modify_model: bool = True) -> str:
 
         # Function which returns index such that list_of_names[index] = name_to_find.
         def find_index_in_names(list_of_names, name_to_find) -> int:
@@ -1732,61 +1785,15 @@ class BN_Realisation:
         self.old_index = source_node_index_general
 
         # This variable will keep new function after variable removing.
-        updated_function = self.__bool_algebra.TRUE
-
-        # This is the flag of first insertion to the updated_function
-        # (see algorithm in the remove_edge description below).
-        first_true_value = False
+        updated_function = self.__bool_algebra.FALSE
 
         # Prepare loop range.
         n = len(function_variables) - 1
 
-        # This loop will generate all possible inputs to the function_to_update.
-        for number in range(2 ** n):
-            binary_representation = (bin(number))[2:].zfill(n)  # Extend boolean array to the length n.
-            bin_list = list(binary_representation)
+        if n == 0:
+            value_1 = function_to_update.subs({function_variables[0] : self.__bool_algebra.FALSE}, simplify=True)
+            value_2 = function_to_update.subs({function_variables[0] : self.__bool_algebra.TRUE}, simplify=True)
 
-            # Substitute 1 by algebra.FALSE and 0 by algebra.TRUE for further substitutions.
-            prepare_values = [
-                self.__bool_algebra.FALSE if bit == '0' else self.__bool_algebra.TRUE
-                for bit in bin_list
-            ]
-
-            # To understand this if, else logic we are going to demonstrate the example:
-            # Assume F(x1,x2,x3,x4) is our function to update. This loop will generate
-            # only boolean table of length 3. For example prepare_value = [false, true, false].
-            # We have two technical considerations x_remove variable index is 4
-            # (i.e. Tilde F(x1,x2,x3) = remove(F, x4)) or x_remove variable index is < 4.
-            # Assume without loss of generality the second case where x_remove index < 4,
-            # let for example x_remove_index = 2. We then want to create two vectors:
-            # [false, TRUE, false, true] and [false, FALSE, false ,true]. More precisely
-            # we extend array by the value stored in x_remove_index and then we put True and False
-            # in the place of x_remove_index. In that way we are always going to generate
-            #
-            #                     |                     [x_1, x_2, ..., TRUE, ..., x_n, x_remove]
-            #                    \ /                  /
-            #  [ x_1, x_2, ..., x_remove, ..., x_n] ->
-            #                                         \
-            #                                           [x_1, x_2, ..., FALSE, ..., x_n, x_remove]
-            if removed_symbol_index_in_fun_var < n:
-                prepare_values.append(prepare_values[removed_symbol_index_in_fun_var])
-            else:
-                prepare_values.append("TECHNICHAL APPEND")  # To extend the length of prepare_values.
-
-            # Firstly set FALSE in the removed variable and prepare dict to the substitution.
-            prepare_values[removed_symbol_index_in_fun_var] = self.__bool_algebra.FALSE
-            substitutions = dict(zip(function_variables, prepare_values))
-            value_1 = function_to_update.subs(substitutions, simplify=True)
-
-            # Now set FALSE into removed variable.
-            substitutions[removed_symbol] = self.__bool_algebra.TRUE
-            value_2 = function_to_update.subs(substitutions, simplify=True)
-
-            # Apply forward_edgetics algortithm to find value of function
-            # basing on the above value_1, value_2.
-            value_of_removed_function = self.__bool_algebra.FALSE
-
-            # Removed variable is activator.
             if value_1 == self.__bool_algebra.FALSE and value_2 == self.__bool_algebra.TRUE:
                 value_of_removed_function = self.__bool_algebra.FALSE
 
@@ -1798,30 +1805,84 @@ class BN_Realisation:
             else:
                 value_of_removed_function = value_1
 
-            # This fragment will create a boolean expression corresponding
-            # to the variable values. For example if for
-            # x_1 = true, x_2 = false, x_remove = false, x_4 = true we have
-            # Tilde{F}(x_1, x_2, x_3) = True we do the following expression:
-            # (x_1 & ~x_2 & x4)
-            # which is true on exactly this vector.
-            if value_of_removed_function == self.__bool_algebra.TRUE:
-                one_logical_block = self.__bool_algebra.TRUE
+            updated_function = value_of_removed_function
+        else:
+            # This loop will generate all possible inputs to the function_to_update.
+            for number in range(2 ** n):
+                binary_representation = (bin(number))[2:].zfill(n)  # Extend boolean array to the length n.
+                bin_list = list(binary_representation)
 
-                for i, val in enumerate(prepare_values):
-                    if i != removed_symbol_index_in_fun_var:
-                        if val == self.__bool_algebra.TRUE:
-                            one_logical_block &= function_variables[i]
+                # Substitute 1 by algebra.FALSE and 0 by algebra.TRUE for further substitutions.
+                prepare_values = [
+                    self.__bool_algebra.FALSE if bit == '0' else self.__bool_algebra.TRUE
+                    for bit in bin_list
+                ]
 
-                        else:
-                            one_logical_block &= ~function_variables[i]
-
-                # This logical blok is combining all expressions to the
-                # one function by putting "or" operator between "one_logical_block", i.e.
-                # the result will be: Tilde{F} = (expr_1) | (expr_2) | (expr_3) ... | (expr_n).
-                if not first_true_value:
-                    first_true_value = True
-                    updated_function = one_logical_block
+                # To understand this if, else logic we are going to demonstrate the example:
+                # Assume F(x1,x2,x3,x4) is our function to update. This loop will generate
+                # only boolean table of length 3. For example prepare_value = [false, true, false].
+                # We have two technical considerations x_remove variable index is 4
+                # (i.e. Tilde F(x1,x2,x3) = remove(F, x4)) or x_remove variable index is < 4.
+                # Assume without loss of generality the second case where x_remove index < 4,
+                # let for example x_remove_index = 2. We then want to create two vectors:
+                # [false, TRUE, false, true] and [false, FALSE, false ,true]. More precisely
+                # we extend array by the value stored in x_remove_index and then we put True and False
+                # in the place of x_remove_index. In that way we are always going to generate
+                #
+                #                     |                     [x_1, x_2, ..., TRUE, ..., x_n, x_remove]
+                #                    \ /                  /
+                #  [ x_1, x_2, ..., x_remove, ..., x_n] ->
+                #                                         \
+                #                                           [x_1, x_2, ..., FALSE, ..., x_n, x_remove]
+                if removed_symbol_index_in_fun_var < n:
+                    prepare_values.append(prepare_values[removed_symbol_index_in_fun_var])
                 else:
+                    prepare_values.append("TECHNICHAL APPEND")  # To extend the length of prepare_values.
+
+                # Firstly set FALSE in the removed variable and prepare dict to the substitution.
+                prepare_values[removed_symbol_index_in_fun_var] = self.__bool_algebra.FALSE
+                substitutions = dict(zip(function_variables, prepare_values))
+                value_1 = function_to_update.subs(substitutions, simplify=True)
+
+                # Now set TRUE into removed variable.
+                substitutions[removed_symbol] = self.__bool_algebra.TRUE
+                value_2 = function_to_update.subs(substitutions, simplify=True)
+
+                # Apply forward_edgetics algortithm to find value of function
+                # basing on the above value_1, value_2.
+                # value_of_removed_function = self.__bool_algebra.FALSE
+
+                # Removed variable is activator.
+                if value_1 == self.__bool_algebra.FALSE and value_2 == self.__bool_algebra.TRUE:
+                    value_of_removed_function = self.__bool_algebra.FALSE
+
+                # Removed value is inhibitor.
+                elif value_1 == self.__bool_algebra.TRUE and value_2 == self.__bool_algebra.FALSE:
+                    value_of_removed_function = self.__bool_algebra.TRUE
+
+                # Removed value is not an activator and inhibitor
+                else:
+                    value_of_removed_function = value_1
+
+                # This fragment will create a boolean expression corresponding
+                # to the variable values. For example if for
+                # x_1 = true, x_2 = false, x_remove = false, x_4 = true we have
+                # Tilde{F}(x_1, x_2, x_3) = True we do the following expression:
+                # (x_1 & ~x_2 & x4)
+                # which is true on exactly this vector.
+                if value_of_removed_function == self.__bool_algebra.TRUE:
+                    one_logical_block = self.__bool_algebra.TRUE
+
+                    for i, val in enumerate(prepare_values):
+                        if i != removed_symbol_index_in_fun_var:
+                            if val == self.__bool_algebra.TRUE:
+                                one_logical_block &= function_variables[i]
+                            else:
+                                one_logical_block &= ~function_variables[i]
+
+                    # This logical blok is combining all expressions to the
+                    # one function by putting "or" operator between "one_logical_block", i.e.
+                    # the result will be: Tilde{F} = (expr_1) | (expr_2) | (expr_3) ... | (expr_n).
                     updated_function |= one_logical_block
 
         updated_function = updated_function.simplify()
@@ -1833,10 +1894,27 @@ class BN_Realisation:
               f"{updated_function}")
         print("=============================================================================================")
 
-        self.functions_str[source_node_index_general] = str(updated_function)
-        self.bdd_expressions[source_node_index_general] = self.__bdd.add_expr(str(updated_function))
+        converted_to_string = str(updated_function)
 
-        return str(updated_function)
+        if modify_model:
+            if converted_to_string == self._CONVERTED_FALSE_IN_BOOLEAN_PY_TO_STRING:
+                self.functions_str[source_node_index_general] = str(self.node_names[self._FIRST_VARIABLE_NAME_IN_ISPL_FILE]) \
+                                                                + "&~" \
+                                                                + str(self.node_names[self._FIRST_VARIABLE_NAME_IN_ISPL_FILE])
+                self.bdd_expressions[source_node_index_general] = self.__bdd.add_expr(self.functions_str[source_node_index_general])
+            elif converted_to_string == self._CONVERTED_TRUE_IN_BOOLEAN_PY_TO_STRING:
+                self.functions_str[source_node_index_general] = str(self.node_names[self._FIRST_VARIABLE_NAME_IN_ISPL_FILE]) \
+                                                                + "|~" \
+                                                                + str(
+                    self.node_names[self._FIRST_VARIABLE_NAME_IN_ISPL_FILE])
+                self.bdd_expressions[source_node_index_general] = self.__bdd.add_expr(self.functions_str[source_node_index_general])
+
+            else:
+                self.functions_str[source_node_index_general] = str(updated_function)
+                self.bdd_expressions[source_node_index_general] = self.__bdd.add_expr(str(updated_function))
+
+        return converted_to_string # Be aware of the string convertation of the True and False constants in boolean.py!
+
 
     """
         This function modifies a selected update function by removing its dependency on the removed_node.
@@ -1856,7 +1934,6 @@ class BN_Realisation:
         Returns:
             list[Function]: the list of all attractors reachable from the push_forward(init_state, number_of_steps, modified BN).
     """
-
     def forward_edgetics(self,
                          source_node: str,
                          target_node: str,
@@ -1878,7 +1955,7 @@ class BN_Realisation:
 
         # Create a BDD representation of init_state.
         bdds_of_init_states = self.__bdd_representation_of_boolean_state(models)
-        # bdd_of_init_states = self.__bdd.false
+        #bdd_of_init_states = self.__bdd.false
 
         # for state_bdd in bdds_of_init_states:
         #     bdd_of_init_states = bdd_of_init_states | state_bdd
@@ -1887,7 +1964,7 @@ class BN_Realisation:
 
         # This BDD will hold whole push_forward image of initial state n-times.
         image = bdds_of_init_states
-
+        
         # Technical container for checking if the image is not changing anymore.
         # Could be used if the BN is relatively small and n is big enough.
         last_image = bdds_of_init_states
@@ -1913,6 +1990,7 @@ class BN_Realisation:
             n -= 1
             last_image = image
 
+
         # This could be removed in a production version.
         # if verbose:
         #     print(f"After pushing forward for {number_of_steps} steps through the BDD we got: \n", flush=True)
@@ -1923,6 +2001,10 @@ class BN_Realisation:
         self.bdd_expressions[self.old_index] = self.__bdd.add_expr(self.original_function)
         self.functions_str[self.old_index] = self.original_function
         self.functions[self.old_index] = self.__bool_algebra.parse(self.original_function, simplify=True)
+
+        T_global = self.__create_bdd_from_boolean_network(self.node_names,
+                                                          nodes_next=node_next,
+                                                          functions=self.bdd_expressions)
 
         # Searching for the forward image.
         whole_forward_image = image
@@ -1960,11 +2042,12 @@ class BN_Realisation:
         attractors = self.find_all_attractors(all_space_constraints=all_space)
 
         return attractors
+    
 
     # For testing only - undocumented: Get the set of attractors reachable from the given set of states.
-    def __get_reachable_attractors(self, states: list[tuple[int, ...]], withTransientStates: bool = False):
+    def _get_reachable_attractors(self, states: list[tuple[int,...]], withTransientStates : bool = False):
         attractors = self.getAttractors()
-        # attractors = self._enumerate_attractors(self.find_all_attractors())
+        #attractors = self._enumerate_attractors(self.find_all_attractors())
 
         attractor_states = set()
         state2attr_dict = dict()
@@ -1999,17 +2082,17 @@ class BN_Realisation:
 
         if withTransientStates:
             transient_states_bin = set([state2bin(s) for s in processed_states]).difference(attractor_states)
-            # return reachableAttractors, transient_states_bin
+            #return reachableAttractors, transient_states_bin
             return attractor_states, transient_states_bin
 
-        # return reachableAttractors
+        #return reachableAttractors
         return attractor_states
 
-    """
 
     """
 
-    def get_reachable_attractors_with_bdd(self, states: list[tuple[int, ...]]) -> dict[str, set[str]]:
+    """
+    def get_reachable_attractors_with_bdd(self, states: list[tuple[int,...]]) -> dict[str, set[str]]:
 
         states_bdd = self.__bdd.false
         for state_bdd in self.__bdd_representation_of_boolean_states([list(s) for s in states]):
@@ -2034,23 +2117,94 @@ class BN_Realisation:
             whole_forward_image = forward_image_constructor
             remember_last_image = one_step_forward_image
 
-        # Create all_space.
-        all_space = whole_forward_image
-
-        # bdd.reorder(self.__bdd, self.custom_order)
+        #bdd.reorder(self.__bdd, self.custom_order)
         # Find all attractors in all_space.
-        attractors = self.find_all_attractors(all_space_constraints=all_space)
+        attractors = self.find_all_attractors(all_space_constraints=whole_forward_image)
 
         return self._enumerate_attractors(attractors)
+    
 
-    def get_reachable_attractors_with_edge_removed(self, source_node, target_node, n_steps, initial_state) -> dict[
-        str, set[str]]:
-        # reachable_attractors = []
 
-        attr_from_s = self._enumerate_attractors(
-            self.forward_edgetics(source_node, target_node, n_steps, initial_state))
+    def get_reachable_states_in_n_steps(self, states: list[tuple[int,...]], num_steps: int = 1) -> dict[str, set[str]]:
 
-        # for attr in attr_from_s.values():
+        states_bdd = self.__bdd.false
+        for state_bdd in self.__bdd_representation_of_boolean_states([list(s) for s in states]):
+            states_bdd = states_bdd | state_bdd
+        # print(f"Size of BDD manager before garbage collection: {len(self.__bdd)}")
+        if not CUDD_LOADED:
+            self.__bdd.collect_garbage()
+        # print(f"Size of BDD manager after garbage collection: {len(self.__bdd)}")
+
+        # Searching for the forward image.
+        one_step_forward_image = states_bdd
+        remember_last_image = states_bdd
+
+        for _ in range(num_steps):
+            # ToDo: Consider decomposition-based implementation (?)
+            one_step_forward_image = self.__one_step_image_monolithic(remember_last_image)
+            
+            if remember_last_image == one_step_forward_image:
+                break
+
+            remember_last_image = one_step_forward_image
+
+        states = set()
+        for models in list(self.__bdd.pick_iter(remember_last_image, care_vars=self.node_names)):
+            state = []
+            for node_name in self.node_names:
+                state.append(1 if models[node_name] else 0)
+            states.add(tuple(state))
+
+        return states
+
+
+    def get_reachable_attractors_with_edge_removed(self, source_node, target_node, n_steps, initial_state) -> dict[str, set[str]]:
+        #reachable_attractors = []
+
+        attr_from_s = self._enumerate_attractors(self.forward_edgetics(source_node, target_node, n_steps, initial_state))
+
+        #for attr in attr_from_s.values():
         #    reachable_attractors.append(attr)
 
         return attr_from_s
+    
+
+    def simulate(self, nsteps: int, init_state: tuple[int, ...] = None):
+        var_indices = {var: i for i, var in enumerate(self.node_names)}
+        parent_variables = [sorted([var_indices[var.__str__()] for var in f.symbols]) for f in self.functions]
+        truth_tables = [[y for _, y in truth_table(self.functions_str[i], [x.__str__() for x in self.functions[i].symbols])] for
+                        i in range(self.num_nodes)]
+
+        pbn = bang.PBN(self.num_nodes,
+                       [1 for _ in range(self.num_nodes)],
+                       [len(f.symbols) for f in self.functions],
+                       truth_tables,
+                       parent_variables,
+                       [[1.] for _ in range(self.num_nodes)],
+                       0.,
+                       [],
+                       n_parallel=min(max(77, self.num_nodes * 10), 2 ** self.num_nodes - 1))
+        pbn._n_parallel = min(max(77, pbn.n_nodes * 10), 2 ** pbn.n_nodes - 1)
+        pbn.device = "gpu"
+
+        if init_state is not None:
+
+            pbn.set_states([[True if bit==1 else False for bit in init_state]])
+
+        else:
+
+            init_state = [random.choices([True, False], k=self.num_nodes)]
+            pbn.set_states(init_state)
+
+        # Simulate the network for nsteps
+        pbn.simple_steps(nsteps)
+
+        # Access the simulation history
+        print("Trajectory history:", pbn.history)
+        # Access the final state
+        print("Last state:", pbn.last_state)
+
+        trajectory = [int2bin(s[0][0], self.num_nodes)[::-1] for s in pbn.history]
+
+        return trajectory
+
