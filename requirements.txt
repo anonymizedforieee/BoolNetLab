@@ -1,7 +1,6 @@
 absl-py
 markdown-it-py
 pyvis
-
 matplotlib
 sympy
 boolean.py
