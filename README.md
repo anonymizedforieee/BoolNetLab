@@ -1,8 +1,5 @@
-# Boolean-networks
-Here we are going to store some algorithms for manual checking of the attractors, creating boolean networks and so on.
-
-# instalation:
-install bang:
+# BoolNetLab
+We present BoolNetLab --~a~novel Python library for the analysis of large Boolean networks operating under the asynchronous update mode.
 
 # Installation
 Install **bang** first
