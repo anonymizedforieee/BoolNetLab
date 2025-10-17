@@ -13,3 +13,6 @@ Install **BoolNetLab**
 pip install -r requirements.txt
 ```
 
+# Tutorial
+The tutorial for the BoolNetLab can be found in tutorial/BoolNetLab-tutorial.ipynb notebook.
+
